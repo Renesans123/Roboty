@@ -107,8 +107,8 @@ try:
         print("RGB" + str(sensor1.rgb) + "col:" 
         + color 
         + "    timeD:" + str(time() - temp_time))
-        dir = (sensor1.rgb[0] - 165)/127
-        turn(15,dir)
+        dir = sensor1.reflected_light_intensity - 35
+        turn(15,dir*2)
         
         temp_time = time()
 
