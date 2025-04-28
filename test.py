@@ -16,7 +16,7 @@ color_sensor1 = ColorSensor(INPUT_2)
 color_sensor2 = ColorSensor(INPUT_3)
 left_wheel = LargeMotor(OUTPUT_A)
 right_wheel = LargeMotor(OUTPUT_B)
-# lift = MediumMotor(OUTPUT_C)
+lift = MediumMotor(OUTPUT_C)
 
 # leds.set_color("RIGHT", "GREEN")
 
@@ -158,10 +158,11 @@ def go(speed, direction):
 
 
 try:
+    lift.on_for_degrees(5, 300)
     temp_time = time()
 
-    speed = 10
     while True:
+        speed = 0
         direction = 0
         # color = get_color(color_sensor1)
         colorL = get_color(color_sensor1)
@@ -169,17 +170,13 @@ try:
 
         # full throttle
         if colorL == colorR == 'WHITE':
-            speed = 10
             direction = 0
         elif colorL == colorR == "BLACK":
-            speed = 5
             direction = 0
         elif colorL == "BLACK":
-            speed = 10
             direction = 0.5#min(1, direction+0.1)
 
         elif colorR == "BLACK":
-            speed = 10
             direction = -0.5 #max(-1, direction-0.1)
         elif colorL == colorR == "BLUE":
             speed = 0
@@ -215,12 +212,18 @@ try:
 except KeyboardInterrupt:
     left_wheel.stop()
     right_wheel.stop()
+    lift.stop()
+    lift.on(speed, brake=False, block=False)
 except BaseException as e:
     left_wheel.stop()
     right_wheel.stop()
+    lift.stop()
+    lift.on(speed, brake=False, block=False)
     print("Błąd b :", e)
 except Exception as e:
     left_wheel.stop()
     right_wheel.stop()
+    lift.stop()
+    lift.on(speed, brake=False, block=False)
     print("Błąd:", e)
 
