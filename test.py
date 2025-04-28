@@ -140,24 +140,29 @@ def go(speed, direction):
     if speed == 0:
         w1.stop()
         w2.stop()
+        return
+    elif direction == 0:
+        w1.on(speed)
+        w2.on(speed)
+        return
     elif direction < 0:
         w1 = right_wheel
         w2 = left_wheel
         direction = -direction
-    elif direction < 1:
-        w1.on(speed - speed * direction)
-        w2.on(speed + speed * direction)
-    else:
-        w1.on(-speed * direction)
-        w2.on(+ speed * direction)
+    # elif direction < 1:
+    #     w1.on(speed - speed * direction)
+    #     w2.on(speed + speed * direction)
+    
+    w1.on(-speed * direction)
+    w2.on(+ speed * direction)
 
 
 try:
     temp_time = time()
 
     speed = 10
-    direction = 0
     while True:
+        direction = 0
         # color = get_color(color_sensor1)
         colorL = get_color(color_sensor1)
         colorR = get_color(color_sensor2)
@@ -168,10 +173,14 @@ try:
             direction = 0
         elif colorL == colorR == "BLACK":
             speed = 5
-            direction = 1
+            direction = 0
         elif colorL == "BLACK":
             speed = 10
-            direction = max(1, direction+0.1)
+            direction = 0.5#min(1, direction+0.1)
+
+        elif colorR == "BLACK":
+            speed = 10
+            direction = -0.5 #max(-1, direction-0.1)
         elif colorL == colorR == "BLUE":
             speed = 0
             direction = 0
