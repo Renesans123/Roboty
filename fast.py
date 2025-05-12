@@ -11,13 +11,13 @@ except Exception:
         def __init__(self, *args, **kwargs):
             pass
         def on(self, speed, brake=False, block=False):
-            print(f"[MOTOR] on: {speed}")
+            print("[MOTOR] on: {}".format(speed))
 
         def stop(self):
             print("[MOTOR] stop")
 
         def on_for_degrees(self, speed, degrees):
-            print(f"[MOTOR] on_for_degrees: {speed}, {degrees}")
+            print("[MOTOR] on_for_degrees: {}, {}".format(speed, degrees))
 
     class MockColorSensor():
         def __init__(self, *args, **kwargs):
@@ -49,7 +49,7 @@ except Exception:
         def __init__(self, *args, **kwargs):
             pass
         def set_color(self, side, color):
-            print(f"[LED] {side}: {color}")
+            print("[LED] {}: {}".format(side, color))
 
     # Replace hardware classes with mocks
     TouchSensor = MockTouchSensor
@@ -80,7 +80,7 @@ RECOVERY_BACKUP_DURATION = 0.1
 RECOVERY_ITERATIONS = 20 #LOST_LINE_THRESHOLD
 
 # New constants for advanced line following
-K_CORRECTION_TURN = 0.4           # coefficient for speed of the backward/slower wheel in corrective static turn (e.g. 1.0 for equal opposite speed)
+K_CORRECTION_TURN = 0.2           # coefficient for speed of the backward/slower wheel in corrective static turn (e.g. 1.0 for equal opposite speed)
 CENTERING_TURN_DURATION = 0.3     # seconds for the brief centering counter-turn
 
 # === STATE MACHINE DEFINITIONS ===
@@ -97,19 +97,20 @@ logger = logging.getLogger(__name__)
 
 # logger.basicConfig(level=logging.DEBUG)
 
+
+# center robot over line
 def static_turn(right: bool) -> None:
-    # Appropriately symmetric correction turn: one wheel back, one forward, then brief recenter
     if right:
-        right_wheel.on(-BASE_SPEED)
-        left_wheel.on(BASE_SPEED)
+        right_wheel.on(BASE_SPEED)
+        left_wheel.on(-BASE_SPEED * K_CORRECTION_TURN)
         while get_color(color_sensor2) != 'BLACK':
             pass
         # Center: both wheels opposite for a short moment
         right_wheel.on(BASE_SPEED)
         left_wheel.on(-BASE_SPEED)
     else:
-        left_wheel.on(-BASE_SPEED)
-        right_wheel.on(BASE_SPEED)
+        left_wheel.on(BASE_SPEED)
+        right_wheel.on(-BASE_SPEED * K_CORRECTION_TURN)
         while get_color(color_sensor1) != 'BLACK':
             pass
         # Center: both wheels opposite for a short moment
