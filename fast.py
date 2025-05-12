@@ -81,8 +81,8 @@ RECOVERY_BACKUP_DURATION = 0.1
 RECOVERY_ITERATIONS = 20 #LOST_LINE_THRESHOLD
 
 # New constants for advanced line following
-K_CORRECTION_TURN = 0.2           # coefficient for speed of the backward/slower wheel in corrective static turn (e.g. 1.0 for equal opposite speed)
-CENTERING_TURN_DURATION = 0.3     # seconds for the brief centering counter-turn
+K_CORRECTION_TURN = 0.18           # coefficient for speed of the backward/slower wheel in corrective static turn (e.g. 1.0 for equal opposite speed)
+CENTERING_TURN_DURATION = 2     # seconds for the brief centering counter-turn
 
 # === STATE MACHINE DEFINITIONS ===
 STATE_IDLE = 0
@@ -104,7 +104,7 @@ def static_turn(right: bool) -> None:
     if right:
         right_wheel.on(BASE_SPEED)
         left_wheel.on(-BASE_SPEED * K_CORRECTION_TURN)
-        while get_color(color_sensor2) != 'BLACK':
+        while get_color(color_sensor_l) != 'BLACK':
             pass
         # Center: both wheels opposite for a short moment
         right_wheel.on(BASE_SPEED)
@@ -112,7 +112,7 @@ def static_turn(right: bool) -> None:
     else:
         left_wheel.on(BASE_SPEED)
         right_wheel.on(-BASE_SPEED * K_CORRECTION_TURN)
-        while get_color(color_sensor1) != 'BLACK':
+        while get_color(color_sensor_r) != 'BLACK':
             pass
         # Center: both wheels opposite for a short moment
         left_wheel.on(BASE_SPEED)
@@ -125,10 +125,10 @@ def static_turn(right: bool) -> None:
 # === DEVICE INITIALIZATION ===
 def init_devices():
     """Initialize all motors, sensors, sound, and LEDs as global variables."""
-    global touch_sensor, color_sensor1, color_sensor2, left_wheel, right_wheel, lift, sound, leds
+    global touch_sensor, color_sensor_l, color_sensor_r, left_wheel, right_wheel, lift, sound, leds
     touch_sensor = TouchSensor(INPUT_1)
-    color_sensor2 = ColorSensor(INPUT_2)
-    color_sensor1 = ColorSensor(INPUT_3)
+    color_sensor_r = ColorSensor(INPUT_2)
+    color_sensor_l = ColorSensor(INPUT_3)
     left_wheel = LargeMotor(OUTPUT_A)
     right_wheel = LargeMotor(OUTPUT_B)
     lift = MediumMotor(OUTPUT_C)
@@ -227,8 +227,8 @@ def stop_all_motors():
 # === LINE FOLLOWING ===
 def get_colors() -> (str, str):
     """Perform one step of proportional line following. Returns detected colors."""
-    lcol = get_color(color_sensor1)
-    rcol = get_color(color_sensor2)
+    lcol = get_color(color_sensor_l)
+    rcol = get_color(color_sensor_r)
     return lcol, rcol
 
 # === BUTTON HANDLING ===
@@ -254,8 +254,8 @@ def lost_line_recovery(base_speed=BASE_SPEED):
         left_wheel.on(-base_speed)
         right_wheel.on(-base_speed)
         sleep(RECOVERY_BACKUP_DURATION)
-        lcol = get_color(color_sensor1)
-        rcol = get_color(color_sensor2)
+        lcol = get_color(color_sensor_l)
+        rcol = get_color(color_sensor_r)
         if lcol == 'BLACK' or rcol == 'BLACK':
             print('Line recovered, continuing previous action...')
             return True
@@ -343,3 +343,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
+
