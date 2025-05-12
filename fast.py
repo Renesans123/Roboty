@@ -102,16 +102,16 @@ logger = logging.getLogger(__name__)
 # center robot over line
 def static_turn(right: bool) -> None:
     if right:
-        right_wheel.on(BASE_SPEED)
-        left_wheel.on(-BASE_SPEED * K_CORRECTION_TURN)
+        right_wheel.on(BASE_SPEED * K_CORRECTION_TURN)
+        left_wheel.on(-BASE_SPEED)
         while get_color(color_sensor_l) != 'BLACK':
             pass
         # Center: both wheels opposite for a short moment
         right_wheel.on(BASE_SPEED)
         left_wheel.on(-BASE_SPEED)
     else:
-        left_wheel.on(BASE_SPEED)
-        right_wheel.on(-BASE_SPEED * K_CORRECTION_TURN)
+        left_wheel.on(BASE_SPEED * K_CORRECTION_TURN)
+        right_wheel.on(-BASE_SPEED)
         while get_color(color_sensor_r) != 'BLACK':
             pass
         # Center: both wheels opposite for a short moment
@@ -295,10 +295,10 @@ def run_transport_cycle(state):
             go(BASE_SPEED, BASE_SPEED)
             lost_counter = 0
         elif lcol == 'BLACK':
-            static_turn(right=True)
+            static_turn(right=False)
             lost_counter = 0
         elif rcol == 'BLACK':
-            static_turn(right=False)
+            static_turn(right=True)
             lost_counter = 0
         else:
             # go straight
