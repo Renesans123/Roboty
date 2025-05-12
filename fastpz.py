@@ -135,12 +135,12 @@ def set_led_status(status):
     leds.set_color('RIGHT', right)
 
 # === COLOR DETECTION ===
-def get_color2(sensor):
+def get_color(sensor):
     """Return color string based on RGB values from a ColorSensor."""
     r, g, b = sensor.rgb
     if b > 100:
         return 'WHITE'
-    if g > 100:
+    if g > 100 and r < 150:
         return 'GREEN'
     if r < 100:
         return 'BLACK'
@@ -148,7 +148,7 @@ def get_color2(sensor):
         return 'RED'
     return 'WHITE'
 
-def get_color(sensor):
+def get_color2(sensor):
     """Return color string based on RGB values from a ColorSensor."""
     try:
         r, g, b = sensor.rgb
