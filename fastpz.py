@@ -79,7 +79,7 @@ TURN_GAIN = 7
 TURN_DURATION = 1.2
 LIFT_UP_SPEED = 10
 LIFT_DOWN_SPEED = -10
-LIFT_DEGREES = 200
+LIFT_DEGREES = 120
 LIFT_PAUSE = 0.5
 RECOVERY_OSCILLATIONS = 3
 RECOVERY_OSCILLATE_DURATION = 0.2
@@ -144,7 +144,7 @@ def get_color2(sensor):
         return 'GREEN'
     if r < 100:
         return 'BLACK'
-    if r > 120:
+    if r > 100:
         return 'RED'
     return 'WHITE'
 
@@ -173,73 +173,40 @@ def get_color(sensor):
 # === ACTIONS ===
 def pick_up(direction):
     """Raise the lift to pick up an object."""
-    logger.info('Picking up object')
     set_led_status('pickup')
-    
-    # lcol, rcol = get_colors()
     print("starting pickup")
-    # print(lcol, rcol)
-    # if lcol == SOURCE_COLOR == rcol:
-    #     go(BASE_SPEED/2,-BASE_SPEED/2)
-    #     sleep(0.7)
-    #     lcol, rcol = get_colors()
-    #     print(lcol, rcol)
-    #     while get_colors()[1] != "BLACK":
-    #         print(lcol, rcol)
-    #         lcol, rcol = get_colors()
-    #         pass
-    # if lcol == SOURCE_COLOR and rcol != SOURCE_COLOR:
+
     if direction:
         turn(90)
-        # go(BASE_SPEED/2,-BASE_SPEED/2)
-        # sleep(0.7)
-        # lcol, rcol = get_colors()
-        # print(lcol, rcol)
-        # while get_colors()[0] != "BLACK":
-        #     print(lcol, rcol)
-        #     lcol, rcol = get_colors()
-        #     pass
     if not direction:
         turn(-90)
-    # if rcol == SOURCE_COLOR and lcol != SOURCE_COLOR:
-        # go(-BASE_SPEED/2,BASE_SPEED/2)
-        # sleep(0.7)
-        # lcol, rcol = get_colors()
-        # print(lcol, rcol)
-        # while get_colors()[1] != "BLACK":
-        #     print(lcol, rcol)
-        #     lcol, rcol = get_colors()
-        #     pass
-    print("route found")
+
     go(BASE_SPEED,BASE_SPEED)
     sleep(2)
     go(0,0)
-    state = STATE_TO_SOURCE
     print("starting going to box")
-    # while(state == STATE_TO_SOURCE):
-    #     state = run_transport_cycle(state)
     
 
-def drive_to_source():
+def drive_to_source(target_color = SOURCE_COLOR, lift_direction=1):
     lcol, rcol = get_colors()
     print("adjusting before box")
     set_led_status("working")
-    while not (lcol == SOURCE_COLOR == rcol):
+    while not (lcol == target_color == rcol):
         lcol, rcol = get_colors()
         print(lcol, rcol)
-        if lcol == SOURCE_COLOR and rcol != SOURCE_COLOR:
-            go(-BASE_SPEED/2,0)
-        if rcol == SOURCE_COLOR and lcol != SOURCE_COLOR:
-            go(0,-BASE_SPEED/2)
-        if lcol == SOURCE_COLOR == rcol:
-            go(BASE_SPEED/2,BASE_SPEED/2)
-    go(BASE_SPEED/2,BASE_SPEED/2)
+        if lcol == target_color and rcol != target_color:
+            go(-BASE_SPEED>>1,0)
+        if rcol == target_color and lcol != target_color:
+            go(0,-BASE_SPEED>>1)
+        if lcol == target_color == rcol:
+            go(BASE_SPEED>>1,BASE_SPEED>>1)
+    go(BASE_SPEED>>1,BASE_SPEED>>1)
     sleep(2)
     go(0,0)
     print("picking up box")
-    lift.on_for_degrees(LIFT_UP_SPEED, LIFT_DEGREES)
+    lift.on_for_degrees(LIFT_UP_SPEED, LIFT_DEGREES * lift_direction)
     sleep(LIFT_PAUSE)
-    go(-BASE_SPEED/2,-BASE_SPEED/2)
+    go(-BASE_SPEED>>1,-BASE_SPEED>>1)
     sleep(3)
     turn(180)
     pass
@@ -335,40 +302,29 @@ def run_transport_cycle(state):
         if 'WHITE' == rcol:
             if lcol == 'WHITE':
                 go(BASE_SPEED, BASE_SPEED)
-                # lost_counter += 1
-                if lost_counter > LOST_LINE_THRESHOLD:
-                    lost_line_recovery()
-                    # lost_counter = 0
                 continue
             elif(lcol == 'BLACK'):
-                go(-BASE_SPEED,-BASE_SPEED*0.7)
+                go(-BASE_SPEED,-BASE_SPEED>>1)
                 sleep(0.05)
                 go(BASE_SPEED, -BASE_SPEED)
                 turn_reduction -= last_state
                 last_state = 1
-                # lost_counter = 0
                 continue
         if 'WHITE' == lcol:
             if rcol == 'WHITE':
                 go(BASE_SPEED, BASE_SPEED)
-                lost_counter += 1
-                if lost_counter > LOST_LINE_THRESHOLD:
-                    lost_line_recovery()
-                    lost_counter = 0
                 continue
             elif(rcol == 'BLACK'):
-                go(-BASE_SPEED*0.7,-BASE_SPEED)
+                go(-BASE_SPEED>>1,-BASE_SPEED)
                 sleep(0.05)
                 go(-BASE_SPEED, BASE_SPEED)
                 last_state = -1
-                lost_counter = 0
                 continue
             
         if state == STATE_TO_SOURCE and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
             stop_all_motors()
             pick_up(lcol == SOURCE_COLOR)
             state = STATE_PICKING_UP
-            # turn_around()
             break
         elif state == STATE_PICKING_UP and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
             stop_all_motors()
@@ -378,15 +334,20 @@ def run_transport_cycle(state):
             break
         elif state ==  STATE_TO_TARGET and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
             stop_all_motors()
-            drop()
+            pick_up(lcol == TARGET_COLOR)
+            state = STATE_DELIVERING
+            turn_around()
+            break
+        elif state ==  STATE_DELIVERING and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
+            stop_all_motors()
+            drive_to_source(target_color=TARGET_COLOR, lift_direction=-1)
             state = STATE_TO_SOURCE
             turn_around()
             break
-        # elif lcol == 'BLACK' and rcol == 'BLACK':
+
+        # both BLACK, turn in previous dirction
         go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
-            # left_wheel.on(BASE_SPEED)
-            # right_wheel.on(BASE_SPEED)
-            # sleep(0.25)
+        
         if touch_sensor.is_pressed:
             stop_all_motors()
             logger.info('Button pressed, stopping')
@@ -400,7 +361,6 @@ def run_transport_cycle(state):
 def main():
     """Main program loop handling repeated transport cycles and safe shutdown."""
     init_devices()
-    # sound.play_tone(220, 0.4)
     state = STATE_TO_SOURCE
     try:
         while True:
@@ -412,11 +372,6 @@ def main():
     except KeyboardInterrupt:
         stop_all_motors()
         print('KeyboardInterrupt, motors stopped')
-    # except BaseException as e:
-    #     stop_all_motors()
-    #     print('BaseExpection, motors stopped.')
-    #     print(e)
-    #     logger.info('Program interrupted, motors stopped')
     except Exception as e:
         stop_all_motors()
         print('Unexpected error:', e)
