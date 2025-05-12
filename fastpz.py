@@ -176,36 +176,40 @@ def pick_up(direction):
     logger.info('Picking up object')
     set_led_status('pickup')
     
-    lcol, rcol = get_colors()
+    # lcol, rcol = get_colors()
     print("starting pickup")
-    print(lcol, rcol)
-    if lcol == SOURCE_COLOR == rcol:
-        go(BASE_SPEED/2,-BASE_SPEED/2)
-        sleep(0.7)
-        lcol, rcol = get_colors()
-        print(lcol, rcol)
-        while get_colors()[1] != "BLACK":
-            print(lcol, rcol)
-            lcol, rcol = get_colors()
-            pass
-    if lcol == SOURCE_COLOR and rcol != SOURCE_COLOR:
-        go(-BASE_SPEED/2,BASE_SPEED/2)
-        sleep(0.7)
-        lcol, rcol = get_colors()
-        print(lcol, rcol)
-        while get_colors()[0] != "BLACK":
-            print(lcol, rcol)
-            lcol, rcol = get_colors()
-            pass
-    if rcol == SOURCE_COLOR and lcol != SOURCE_COLOR:
-        go(BASE_SPEED/2,-BASE_SPEED/2)
-        sleep(0.7)
-        lcol, rcol = get_colors()
-        print(lcol, rcol)
-        while get_colors()[1] != "BLACK":
-            print(lcol, rcol)
-            lcol, rcol = get_colors()
-            pass
+    # print(lcol, rcol)
+    # if lcol == SOURCE_COLOR == rcol:
+    #     go(BASE_SPEED/2,-BASE_SPEED/2)
+    #     sleep(0.7)
+    #     lcol, rcol = get_colors()
+    #     print(lcol, rcol)
+    #     while get_colors()[1] != "BLACK":
+    #         print(lcol, rcol)
+    #         lcol, rcol = get_colors()
+    #         pass
+    # if lcol == SOURCE_COLOR and rcol != SOURCE_COLOR:
+    if direction:
+        turn(90)
+        # go(BASE_SPEED/2,-BASE_SPEED/2)
+        # sleep(0.7)
+        # lcol, rcol = get_colors()
+        # print(lcol, rcol)
+        # while get_colors()[0] != "BLACK":
+        #     print(lcol, rcol)
+        #     lcol, rcol = get_colors()
+        #     pass
+    if not direction:
+        turn(-90)
+    # if rcol == SOURCE_COLOR and lcol != SOURCE_COLOR:
+        # go(-BASE_SPEED/2,BASE_SPEED/2)
+        # sleep(0.7)
+        # lcol, rcol = get_colors()
+        # print(lcol, rcol)
+        # while get_colors()[1] != "BLACK":
+        #     print(lcol, rcol)
+        #     lcol, rcol = get_colors()
+        #     pass
     print("route found")
     go(BASE_SPEED,BASE_SPEED)
     sleep(2)
@@ -235,6 +239,9 @@ def drive_to_source():
     print("picking up box")
     lift.on_for_degrees(LIFT_UP_SPEED, LIFT_DEGREES)
     sleep(LIFT_PAUSE)
+    go(-BASE_SPEED/2,-BASE_SPEED/2)
+    sleep(3)
+    turn(180)
     pass
 
 def drop():
@@ -308,6 +315,16 @@ def lost_line_recovery(base_speed=BASE_SPEED):
 def go(left, right):
     left_wheel.on(left)
     right_wheel.on(right)
+
+def turn(degrees):
+    if degrees> 0:
+        go(BASE_SPEED/2,-BASE_SPEED/2)
+    else:
+        go(-BASE_SPEED/2,BASE_SPEED/2)
+        degrees = -degrees
+    sleep(3.8 * degrees/90)
+    left_wheel.stop()
+    right_wheel.stop()
 
 # === MAIN TRANSPORT ROUTINE WITH STATE MACHINE ===
 def run_transport_cycle(state):
