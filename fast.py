@@ -9,7 +9,8 @@ try:
 except Exception:
     class MockMotor():
         def __init__(self, *args, **kwargs):
-            pass
+            print("!!!!!!  hardware not detected !!!!!! ")
+            print("!!!!!!  fallback to simulate mock HW !!!!!! ")
         def on(self, speed, brake=False, block=False):
             print("[MOTOR] on: {}".format(speed))
 
@@ -294,22 +295,19 @@ def run_transport_cycle(state):
             go(BASE_SPEED, BASE_SPEED)
             lost_counter = 0
         elif lcol == 'BLACK':
-            # line under left sensor – steer right by stopping left wheel
             static_turn(right=True)
             lost_counter = 0
         elif rcol == 'BLACK':
-            # line under right sensor – steer left by stopping right wheel
             static_turn(right=False)
             lost_counter = 0
         else:
-            # Both sensors on white – maybe off the line
+            # go straight
             go(BASE_SPEED, BASE_SPEED)
             lost_counter += 1
             if lost_counter > LOST_LINE_THRESHOLD:
                 recovered = lost_line_recovery()
                 lost_counter = 0
                 if not recovered:
-                    # Give control back to idle state if recovery failed
                     return STATE_IDLE
 
         # Emergency stop by touch sensor
