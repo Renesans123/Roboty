@@ -11,13 +11,13 @@ except Exception:
         def __init__(self, *args, **kwargs):
             pass
         def on(self, speed, brake=False, block=False):
-            print(f"[MOTOR] on: {speed}")
+            print("[MOTOR] on: {}".format(speed))
 
         def stop(self):
             print("[MOTOR] stop")
 
         def on_for_degrees(self, speed, degrees):
-            print(f"[MOTOR] on_for_degrees: {speed}, {degrees}")
+            print("[MOTOR] on_for_degrees: {}, {}".format(speed, degrees))
 
     class MockColorSensor():
         def __init__(self, *args, **kwargs):
@@ -44,23 +44,17 @@ except Exception:
             self.checked +=1
             return True
 
-    class MockSound():
-        def __init__(self, *args, **kwargs):
-            pass
-        def play_tone(self, freq, duration):
-            print(f"[SOUND] Playing tone: {freq}Hz for {duration}s")
 
     class MockLeds():
         def __init__(self, *args, **kwargs):
             pass
         def set_color(self, side, color):
-            print(f"[LED] {side}: {color}")
+            print("[LED] {}: {}".format(side, color))
 
     # Replace hardware classes with mocks
     TouchSensor = MockTouchSensor
     ColorSensor = MockColorSensor
     LargeMotor = MediumMotor = MockMotor
-    Sound = MockSound
     Leds = MockLeds
 
     # Constants to avoid hardware errors
@@ -81,10 +75,17 @@ LIFT_UP_SPEED = 10
 LIFT_DOWN_SPEED = -10
 LIFT_DEGREES = 200
 LIFT_PAUSE = 0.5
-RECOVERY_OSCILLATIONS = 3
 RECOVERY_OSCILLATE_DURATION = 0.2
 RECOVERY_BACKUP_DURATION = 0.1
-RECOVERY_ITERATIONS= 20 #LOST_LINE_THRESHOLD
+RECOVERY_ITERATIONS = 20 #LOST_LINE_THRESHOLD
+
+# New constants for advanced line following
+CENTERING_TURN_DURATION = 0.1     # seconds for the brief centering counter-turn
+CORRECTIVE_TURN_STEP_DURATION = 0.02 # duration of each small step in corrective turn
+PRE_TURN_STOP_DURATION = 0.05       # duration to stop before initiating a corrective turn
+MAIN_LOOP_STEP_DURATION = 0.01      # small sleep in the main transport loop
+K_CORRECTION_TURN = 1.0           # coefficient for speed of the backward/slower wheel in corrective static turn (e.g. 1.0 for equal opposite speed)
+K_CENTERING_TURN = 0.7            # coefficient for speed during centering maneuver (e.g. 0.7 for 70% of BASE_SPEED)
 
 # === STATE MACHINE DEFINITIONS ===
 STATE_IDLE = 0
@@ -93,8 +94,7 @@ STATE_TO_TARGET = 2
 STATE_DELIVERED = 3
 
 # === LOGGING SETUP ===
-LOG_FILE = 'robot.log'
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
+logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,6 @@ def init_devices():
     left_wheel = LargeMotor(OUTPUT_A)
     right_wheel = LargeMotor(OUTPUT_B)
     lift = MediumMotor(OUTPUT_C)
-    sound = Sound()
     leds = Leds()
 
 # === LED FEEDBACK ===
@@ -152,27 +151,48 @@ def pick_up():
     logger.info('Picking up object')
     set_led_status('pickup')
 
-    lcol, rcol = get_colors()
+    lcol, rcol = get_colors() # Get current colors for initial check
 
+    # Fine-tune alignment over SOURCE_COLOR before picking up
     if lcol == SOURCE_COLOR and rcol != SOURCE_COLOR:
-        go(-BASE_SPEED/2,BASE_SPEED/2)
-        sleep(0.1)
-        while get_color()[0] != "BLACK":
-            pass
-    if rcol == SOURCE_COLOR and lcol == SOURCE_COLOR:
-        go(BASE_SPEED/2,-BASE_SPEED/2)
-        sleep(0.1)
-        while get_color()[1] != "BLACK":
-            pass
-    go(BASE_SPEED,BASE_SPEED)
-    sleep(0.5)
-    go(0,0)
-    state = STATE_TO_SOURCE
-    while(state == STATE_TO_SOURCE):
-        state = run_transport_cycle(state)
+        logger.info("Aligning: {} on left. Turning slightly right.".format(SOURCE_COLOR))
+        go(-BASE_SPEED / 2, BASE_SPEED / 2)
+        sleep(0.1) # Brief turn
+        # Loop until left sensor is back on black (edge of line)
+        # This implies the source color is a patch on one side of the line.
+        # Consider if this logic needs to be more robust or tied to finding the line's center.
+        temp_lcol = get_color(color_sensor1)
+        while temp_lcol != 'BLACK':
+            logger.debug("Aligning (L on {}): Waiting for left sensor to see BLACK. Currently: {}".format(SOURCE_COLOR, temp_lcol))
+            sleep(0.05)
+            temp_lcol = get_color(color_sensor1)
+            if touch_sensor.is_pressed: return # Allow interruption
+        logger.info("Alignment: Left sensor now on BLACK.")
+
+    elif rcol == SOURCE_COLOR and lcol != SOURCE_COLOR: # Corrected this condition
+        logger.info("Aligning: {} on right. Turning slightly left.".format(SOURCE_COLOR))
+        go(BASE_SPEED / 2, -BASE_SPEED / 2)
+        sleep(0.1) # Brief turn
+        # Loop until right sensor is back on black (edge of line)
+        temp_rcol = get_color(color_sensor2)
+        while temp_rcol != 'BLACK':
+            logger.debug("Aligning (R on {}): Waiting for right sensor to see BLACK. Currently: {}".format(SOURCE_COLOR, temp_rcol))
+            sleep(0.05)
+            temp_rcol = get_color(color_sensor2)
+            if touch_sensor.is_pressed: return # Allow interruption
+        logger.info("Alignment: Right sensor now on BLACK.")
+    
+    # If both are on source color, or after alignment, move forward slightly to ensure grasp
+    # The original code had a complex re-entry to run_transport_cycle here. Removing it.
+    # Assuming the run_transport_cycle got us close enough and the fine-tune above helped.
+    logger.info("Moving forward slightly before lift.")
+    go(BASE_SPEED, BASE_SPEED)
+    sleep(0.5) # Adjust duration as needed
+    go(0,0) # Stop before lifting
     
     lift.on_for_degrees(LIFT_UP_SPEED, LIFT_DEGREES)
     sleep(LIFT_PAUSE)
+    logger.info("Object picked up.")
 
 def drop():
     """Lower the lift to drop an object."""
@@ -248,87 +268,131 @@ def go(left, right):
 
 # === MAIN TRANSPORT ROUTINE WITH STATE MACHINE ===
 def run_transport_cycle(state):
-    """Run a single transport cycle using a state machine."""
+    """Run a single transport cycle using a two-sensor advanced line follower."""
     lost_counter = 0
-    turn_reduction=0
-    last_state=1
+
     while True:
-        print("Lost line counter: ", lost_counter)
         lcol, rcol = get_colors()
-        if 'WHITE' == rcol:
-            if lcol == 'WHITE':
-                go(BASE_SPEED, BASE_SPEED)
-                lost_counter += 1
-                if lost_counter > LOST_LINE_THRESHOLD:
-                    lost_line_recovery()
-                    lost_counter = 0
-            elif(lcol == 'BLACK'):
-                go(-BASE_SPEED,-BASE_SPEED*0.7)
-                sleep(0.05)
-                go(BASE_SPEED, -BASE_SPEED)
-                turn_reduction -= last_state
-                last_state = 1
-                lost_counter = 0
-            continue
-        if 'WHITE' == lcol:
-            if rcol == 'WHITE':
-                go(BASE_SPEED, BASE_SPEED)
-                lost_counter += 1
-                if lost_counter > LOST_LINE_THRESHOLD:
-                    lost_line_recovery()
-                    lost_counter = 0
-            elif(rcol == 'BLACK'):
-                go(-BASE_SPEED*0.7,-BASE_SPEED)
-                sleep(0.05)
-                go(-BASE_SPEED, BASE_SPEED)
-                last_state = -1
-                lost_counter = 0
-            continue
-            
+        # Basic logging for current sensor readings and state
+        # Consider changing to logger.debug for less verbose output during normal operation
+        # print("L: {}, R: {}, Lost: {}, State: {}".format(lcol, rcol, lost_counter, state))
+        logger.info("L: {}, R: {}, Lost: {}, State: {}".format(lcol, rcol, lost_counter, state))
+
+        # --- Colour-based state transitions for pick-up/drop-off ---
         if state == STATE_TO_SOURCE and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
+            logger.info("Source color {} detected.".format(SOURCE_COLOR))
             stop_all_motors()
             pick_up()
             state = STATE_TO_TARGET
             turn_around()
-            break
-        elif lcol == TARGET_COLOR or rcol == TARGET_COLOR:
+            break 
+        # Added check for STATE_TO_TARGET for clarity, though TARGET_COLOR implies it
+        if state == STATE_TO_TARGET and (lcol == TARGET_COLOR or rcol == TARGET_COLOR):
+            logger.info("Target color {} detected.".format(TARGET_COLOR))
             stop_all_motors()
             drop()
             state = STATE_TO_SOURCE
             turn_around()
             break
-        # elif lcol == 'BLACK' and rcol == 'BLACK':
-        go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
-            # left_wheel.on(BASE_SPEED)
-            # right_wheel.on(BASE_SPEED)
-            # sleep(0.25)
+
+        # --- Advanced Line Following Logic ---
+        if lcol == 'BLACK' and rcol == 'WHITE':  # Line under left sensor, veer right
+            logger.info("Left sensor on BLACK, right on WHITE. Initiating corrective static RIGHT turn.")
+            stop_all_motors()
+            sleep(PRE_TURN_STOP_DURATION)
+            while lcol == 'BLACK' and rcol == 'WHITE':
+                go(-K_CORRECTION_TURN * BASE_SPEED, BASE_SPEED)  # Left wheel backward, Right wheel forward
+                sleep(CORRECTIVE_TURN_STEP_DURATION)
+                lcol_new, rcol_new = get_colors()
+                if touch_sensor.is_pressed:
+                    stop_all_motors()
+                    logger.info('Button pressed during corrective RIGHT turn, stopping.')
+                    return STATE_IDLE
+                if lcol_new != lcol or rcol_new != rcol: # Only update if changed to avoid spamming logs
+                    lcol, rcol = lcol_new, rcol_new
+                    logger.info("Corrective RIGHT turn: L:{}, R:{}".format(lcol, rcol))
+                if lcol == 'WHITE': # Guiding sensor lost the line
+                    logger.warning("Left (guiding) sensor lost BLACK during corrective RIGHT turn.")
+                    break # Exit corrective turn loop
+            stop_all_motors() # Stop after corrective turn loop
+
+            if lcol == 'BLACK' and rcol == 'BLACK': # Check if both sensors are now on black
+                logger.info("Both sensors on BLACK after corrective RIGHT turn. Performing centering LEFT turn.")
+                go(K_CENTERING_TURN * BASE_SPEED, -K_CENTERING_TURN * BASE_SPEED) # Centering: Left fwd, Right bwd
+                sleep(CENTERING_TURN_DURATION)
+                stop_all_motors()
+            lost_counter = 0 # Reset lost counter after a correction attempt
+
+        elif rcol == 'BLACK' and lcol == 'WHITE':  # Line under right sensor, veer left
+            logger.info("Right sensor on BLACK, left on WHITE. Initiating corrective static LEFT turn.")
+            stop_all_motors()
+            sleep(PRE_TURN_STOP_DURATION)
+            while rcol == 'BLACK' and lcol == 'WHITE':
+                go(BASE_SPEED, -K_CORRECTION_TURN * BASE_SPEED)  # Left wheel forward, Right wheel backward
+                sleep(CORRECTIVE_TURN_STEP_DURATION)
+                lcol_new, rcol_new = get_colors()
+                if touch_sensor.is_pressed:
+                    stop_all_motors()
+                    logger.info('Button pressed during corrective LEFT turn, stopping.')
+                    return STATE_IDLE
+                if lcol_new != lcol or rcol_new != rcol:
+                    lcol, rcol = lcol_new, rcol_new
+                    logger.info("Corrective LEFT turn: L:{}, R:{}".format(lcol, rcol))
+                if rcol == 'WHITE': # Guiding sensor lost the line
+                    logger.warning("Right (guiding) sensor lost BLACK during corrective LEFT turn.")
+                    break # Exit corrective turn loop
+            stop_all_motors() # Stop after corrective turn loop
+
+            if lcol == 'BLACK' and rcol == 'BLACK': # Check if both sensors are now on black
+                logger.info("Both sensors on BLACK after corrective LEFT turn. Performing centering RIGHT turn.")
+                go(-K_CENTERING_TURN * BASE_SPEED, K_CENTERING_TURN * BASE_SPEED) # Centering: Left bwd, Right fwd
+                sleep(CENTERING_TURN_DURATION)
+                stop_all_motors()
+            lost_counter = 0 # Reset lost counter after a correction attempt
+
+        elif lcol == 'BLACK' and rcol == 'BLACK':  # Both sensors on the line
+            logger.info("Both sensors on BLACK. Driving straight.")
+            go(BASE_SPEED, BASE_SPEED)
+            lost_counter = 0
+        
+        else:  # Both sensors on WHITE or other unexpected combination
+            logger.info("Sensors not on a clear line (L:{}, R:{}). Driving straight, lost_counter = {}.".format(lcol, rcol, lost_counter + 1))
+            go(BASE_SPEED, BASE_SPEED)
+            lost_counter += 1
+            if lost_counter > LOST_LINE_THRESHOLD:
+                logger.warning("Lost line threshold ({}) reached.".format(LOST_LINE_THRESHOLD))
+                recovered = lost_line_recovery() # lost_line_recovery handles its own logging
+                lost_counter = 0  # Reset counter regardless of recovery success
+                if not recovered:
+                    logger.error("Lost line recovery FAILED. Returning to IDLE state.")
+                    return STATE_IDLE
+                else:
+                    logger.info("Lost line recovery SUCCEEDED.")
+
+        # Main loop emergency stop check
         if touch_sensor.is_pressed:
             stop_all_motors()
-            logger.info('Button pressed, stopping')
+            logger.info('Button pressed in main loop, stopping.')
             return STATE_IDLE
-    return state
+        
+        sleep(MAIN_LOOP_STEP_DURATION) # Brief pause for stability and to reduce CPU load
+
+    return state # Should be unreachable due to breaks or returns in the loop
 
 # === MAIN ENTRY POINT ===
 def main():
     """Main program loop handling repeated transport cycles and safe shutdown."""
     init_devices()
-    # sound.play_tone(220, 0.4)
     state = STATE_TO_SOURCE
     try:
         while True:
             wait_for_button_press()
             while state != STATE_IDLE:
                 state = run_transport_cycle(state)
-            # After button stop, go back to IDLE (wait for next press)
             state = STATE_TO_SOURCE
     except KeyboardInterrupt:
         stop_all_motors()
         print('KeyboardInterrupt, motors stopped')
-    # except BaseException as e:
-    #     stop_all_motors()
-    #     print('BaseExpection, motors stopped.')
-    #     print(e)
-    #     logger.info('Program interrupted, motors stopped')
     except Exception as e:
         stop_all_motors()
         print('Unexpected error:', e)
