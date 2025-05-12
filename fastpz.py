@@ -317,14 +317,10 @@ def go(left, right):
     right_wheel.on(right)
 
 def turn(degrees):
-    if degrees> 0:
-        go(BASE_SPEED/2,-BASE_SPEED/2)
-    else:
-        go(-BASE_SPEED/2,BASE_SPEED/2)
-        degrees = -degrees
-    sleep(3.8 * degrees/90)
-    left_wheel.stop()
-    right_wheel.stop()
+    degrees <<= 1
+    sign = 1 if degrees > 0 else -1
+    right_wheel.on_for_degrees(BASE_SPEED >> 1, degrees*sign, block=False)
+    left_wheel.on_for_degrees(BASE_SPEED >> 1, -degrees*sign, block=True)
 
 # === MAIN TRANSPORT ROUTINE WITH STATE MACHINE ===
 def run_transport_cycle(state):
