@@ -285,13 +285,13 @@ def run_transport_cycle(state):
             break
 
         # both BLACK, turn in previous dirction
-        # go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
-        if special_black:
-            if time()-special_black < 15:
-                turn(90)
-            special_black = False
-        else:
-            go(BASE_SPEED,BASE_SPEED)
+        go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
+        # if special_black:
+        #     if time()-special_black < 15:
+        #         turn(90)
+        #     special_black = False
+        # else:
+        #     go(BASE_SPEED,BASE_SPEED)
     return state
 
 # === MAIN ENTRY POINT ===
