@@ -24,3 +24,4 @@ right_wheel.stop()
 #red 255 40 30
 
 #scp ./fastpz.py robot@192.168.18.80:~/fastpz.py
+#ssh robot@192.168.18.80
