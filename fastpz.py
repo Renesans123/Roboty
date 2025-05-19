@@ -41,7 +41,7 @@ except Exception:
         def is_pressed(self):
             if self.checked  >= 2:
                 return False
-            self.checked +=1
+            self.checked += 1
             return True
 
     class MockSound():
@@ -138,47 +138,59 @@ def set_led_status(status):
 def get_color(sensor):
     """Return color string based on RGB values from a ColorSensor."""
     r, g, b = sensor.rgb
+
+    # print(r,g,b)
     if b > 100:
         return 'WHITE'
-    if g > 100 and r < 150:
+    if r < 40 and g > 60 and b < 80:
         return 'GREEN'
-    if r < 100:
-        return 'BLACK'
-    if r > 100:
+    if r > 100 and g<60:
         return 'RED'
+    if r < 100 and g<100 and b<100:
+        return 'BLACK'
     return 'WHITE'
 
-def get_color2(sensor):
-    """Return color string based on RGB values from a ColorSensor."""
-    try:
-        r, g, b = sensor.rgb
-    except Exception as e:
-        logger.error('Sensor read error: ', e)
-        set_led_status('error')
-        return 'UNKNOWN'
-    if r > 100 and g > 100 and b > 100:
-        return 'WHITE'
-    # if r < 70 and g < 120 and b > 100:
-    #     return 'BLUE'
-    if r < 50 and g > 100 and b < 40:
-        return 'GREEN'
-    if r < 100 and g < 100 and b < 100:
-        return 'BLACK'
-    if r > 120 and g < 60 and b < 60:
-        return 'RED'
-    # if r > 120 and g > 100 and b < 60:
-    #     return 'YELLOW'
-    return 'WHITE'
+#green 20 75 50
+#white 130 130 180
+#yellow 160 130 40 
+#red 120 20 15
+#blue 20 50 120
+#gray 140 135 200
+#laczenie  100 110 180
+
+
+
+# def get_color2(sensor):
+#     """Return color string based on RGB values from a ColorSensor."""
+#     try:
+#         r, g, b = sensor.rgb
+#     except Exception as e:
+#         logger.error('Sensor read error: ', e)
+#         set_led_status('error')
+#         return 'UNKNOWN'
+#     if r > 100 and g > 100 and b > 100:
+#         return 'WHITE'
+#     # if r < 70 and g < 120 and b > 100:
+#     #     return 'BLUE'
+#     if r < 50 and g > 100 and b < 40:
+#         return 'GREEN'
+#     if r < 100 and g < 100 and b < 100:
+#         return 'BLACK'
+#     if r > 120 and g < 60 and b < 60:
+#         return 'RED'
+#     # if r > 120 and g > 100 and b < 60:
+#     #     return 'YELLOW'
+#     return 'WHITE'
 
 # === ACTIONS ===
-def pick_up(direction):
+def turn_pick_up(turn_right):
     """Raise the lift to pick up an object."""
     set_led_status('pickup')
     print("starting pickup")
 
-    if direction:
+    if turn_right:
         turn(90)
-    if not direction:
+    else:
         turn(-90)
 
     go(BASE_SPEED,BASE_SPEED)
@@ -187,47 +199,36 @@ def pick_up(direction):
     print("starting going to box")
     
 
-def drive_to_source(target_color = SOURCE_COLOR, lift_direction=1):
+def drive_to_source(target_color, lift_direction):
     lcol, rcol = get_colors()
-    print("adjusting before box")
+    # print("adjusting before box")
     set_led_status("working")
-    while not (lcol == target_color == rcol):
-        lcol, rcol = get_colors()
-        print(lcol, rcol)
-        if lcol == target_color and rcol != target_color:
-            go(-BASE_SPEED>>1,0)
-        if rcol == target_color and lcol != target_color:
-            go(0,-BASE_SPEED>>1)
-        if lcol == target_color == rcol:
-            go(BASE_SPEED>>1,BASE_SPEED>>1)
-    go(BASE_SPEED>>1,BASE_SPEED>>1)
-    sleep(2)
-    go(0,0)
+    # while not (lcol == target_color == rcol):
+    #     lcol, rcol = get_colors()
+    #     # print(lcol, rcol)
+    #     if lcol == target_color and rcol != target_color:
+    #         go(0,-BASE_SPEED>>1)
+    #     if rcol == target_color and lcol != target_color:
+    #         go(-BASE_SPEED>>1,0)
+    #     # if lcol == target_color == rcol:
+    #     go(BASE_SPEED>>1,BASE_SPEED>>1)
+    right_wheel.on_for_degrees(BASE_SPEED, 100, block=False)
+    left_wheel.on_for_degrees(BASE_SPEED, 100, block=True)
+    # go(0,0)
     print("picking up box")
     lift.on_for_degrees(LIFT_UP_SPEED, LIFT_DEGREES * lift_direction)
-    sleep(LIFT_PAUSE)
-    go(-BASE_SPEED>>1,-BASE_SPEED>>1)
-    sleep(3)
+    # sleep(LIFT_PAUSE)
+    right_wheel.on_for_degrees(BASE_SPEED, -100, block=False)
+    left_wheel.on_for_degrees(BASE_SPEED, -100, block=True)
     turn(180)
-    pass
+    # pass
 
-def drop():
-    """Lower the lift to drop an object."""
-    logger.info('Dropping object')
-    set_led_status('drop')
-    lift.on_for_degrees(LIFT_DOWN_SPEED, LIFT_DEGREES)
-    sleep(LIFT_PAUSE)
-
-def turn_around(base_speed=BASE_SPEED, duration=TURN_DURATION):
-    """Turn the robot 180 degrees in place."""
-    logger.info('Turning around')
-    set_led_status('working')
-    left_wheel.on(base_speed)
-    right_wheel.on(-base_speed)
-    sleep(duration)
-    stop_all_motors()
-    # sleep(0.2)
-    set_led_status('ready')
+# def drop():
+#     """Lower the lift to drop an object."""
+#     logger.info('Dropping object')
+#     set_led_status('drop')
+#     lift.on_for_degrees(LIFT_DOWN_SPEED, LIFT_DEGREES)
+#     # sleep(LIFT_PAUSE)
 
 # === MOTOR SAFETY ===
 def stop_all_motors():
@@ -285,69 +286,19 @@ def go(left, right):
 
 def turn(degrees):
     degrees <<= 1
-    sign = 1 if degrees > 0 else -1
-    right_wheel.on_for_degrees(BASE_SPEED >> 1, degrees*sign, block=False)
-    left_wheel.on_for_degrees(BASE_SPEED >> 1, -degrees*sign, block=True)
+    right_wheel.on_for_degrees(BASE_SPEED, degrees, block=False)
+    left_wheel.on_for_degrees(BASE_SPEED, -degrees, block=True)
 
 # === MAIN TRANSPORT ROUTINE WITH STATE MACHINE ===
 def run_transport_cycle(state):
     """Run a single transport cycle using a state machine."""
-    lost_counter = 0
-    turn_reduction=0
+    # lost_counter = 0
+    # turn_reduction=0
     last_state=1
     while True:
         # print("Lost line counter: ", lost_counter)
         lcol, rcol = get_colors()
-        print(lcol, rcol)
-        if 'WHITE' == rcol:
-            if lcol == 'WHITE':
-                go(BASE_SPEED, BASE_SPEED)
-                continue
-            elif(lcol == 'BLACK'):
-                go(-BASE_SPEED,-BASE_SPEED>>1)
-                sleep(0.05)
-                go(BASE_SPEED, -BASE_SPEED)
-                turn_reduction -= last_state
-                last_state = 1
-                continue
-        if 'WHITE' == lcol:
-            if rcol == 'WHITE':
-                go(BASE_SPEED, BASE_SPEED)
-                continue
-            elif(rcol == 'BLACK'):
-                go(-BASE_SPEED>>1,-BASE_SPEED)
-                sleep(0.05)
-                go(-BASE_SPEED, BASE_SPEED)
-                last_state = -1
-                continue
-            
-        if state == STATE_TO_SOURCE and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
-            stop_all_motors()
-            pick_up(lcol == SOURCE_COLOR)
-            state = STATE_PICKING_UP
-            break
-        elif state == STATE_PICKING_UP and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
-            stop_all_motors()
-            drive_to_source()
-            state = STATE_TO_TARGET
-            turn_around()
-            break
-        elif state ==  STATE_TO_TARGET and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
-            stop_all_motors()
-            pick_up(lcol == TARGET_COLOR)
-            state = STATE_DELIVERING
-            turn_around()
-            break
-        elif state ==  STATE_DELIVERING and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
-            stop_all_motors()
-            drive_to_source(target_color=TARGET_COLOR, lift_direction=-1)
-            state = STATE_TO_SOURCE
-            turn_around()
-            break
-
-        # both BLACK, turn in previous dirction
-        go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
-        
+        # global BASE_SPEED 
         if touch_sensor.is_pressed:
             stop_all_motors()
             logger.info('Button pressed, stopping')
@@ -355,6 +306,55 @@ def run_transport_cycle(state):
             while(not touch_sensor.is_pressed):
                 pass
             return STATE_IDLE
+        # print(lcol, rcol, )
+        if 'WHITE' == rcol:
+            if lcol == 'WHITE':
+                go(BASE_SPEED, BASE_SPEED)
+                # BASE_SPEED = min(BASE_SPEED+1,20)
+                continue
+            elif(lcol == 'BLACK'):
+                right_wheel.on_for_degrees(BASE_SPEED, -15, block=False)
+                left_wheel.on_for_degrees(BASE_SPEED, -30, block=True)
+                go(BASE_SPEED, -BASE_SPEED)
+                # BASE_SPEED = 10
+                # turn_reduction -= last_state
+                last_state = 1
+                continue
+        if 'WHITE' == lcol:
+            # if rcol == 'WHITE':
+            #     go(BASE_SPEED, BASE_SPEED)
+            #     continue
+            if(rcol == 'BLACK'):
+                right_wheel.on_for_degrees(BASE_SPEED, -30, block=False)
+                left_wheel.on_for_degrees(BASE_SPEED, -15, block=True)
+                go(-BASE_SPEED, BASE_SPEED)
+                last_state = -1
+                # BASE_SPEED = 10
+                continue
+        # BASE_SPEED = 10    
+        if state == STATE_TO_SOURCE and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
+            stop_all_motors()
+            turn_pick_up(rcol == SOURCE_COLOR)
+            state = STATE_PICKING_UP
+            break
+        elif state == STATE_PICKING_UP and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
+            stop_all_motors()
+            drive_to_source(target_color=SOURCE_COLOR, lift_direction=1)
+            state = STATE_TO_TARGET
+            break
+        elif state ==  STATE_TO_TARGET and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
+            stop_all_motors()
+            turn_pick_up(rcol == TARGET_COLOR)
+            state = STATE_DELIVERING
+            break
+        elif state ==  STATE_DELIVERING and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
+            stop_all_motors()
+            drive_to_source(target_color=TARGET_COLOR, lift_direction=-1)
+            state = STATE_TO_SOURCE
+            break
+
+        # both BLACK, turn in previous dirction
+        go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
     return state
 
 # === MAIN ENTRY POINT ===
