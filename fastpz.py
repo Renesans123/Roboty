@@ -76,8 +76,8 @@ import logging
 from time import sleep
 
 # === CONFIGURATION ===
-SOURCE_COLOR = 'RED'
-TARGET_COLOR = 'GREEN'
+SOURCE_COLOR = 'GREEN'
+TARGET_COLOR = 'RED'
 BASE_SPEED = 10
 LIFT_UP_SPEED = 10
 LIFT_DEGREES = 120
@@ -140,12 +140,34 @@ def get_color(sensor):
     # #print(r,g,b)
     if b > 100:
         return 'WHITE'
-    if r < 40 and g > 60 and b < 80:
+    if r < 60 and g > 60 and b < 80:
         return 'GREEN'
     if r > 100 and g<60:
         return 'RED'
     if r < 100 and g<100 and b<100:
         return 'BLACK'
+    return 'WHITE'
+
+def get_color2(sensor):
+    """Return color string based on RGB values from a ColorSensor."""
+    try:
+        r, g, b = sensor.rgb
+    except Exception as e:
+        logger.error('Sensor read error: ', e)
+        set_led_status('error')
+        return 'UNKNOWN'
+    if r > 100 and g > 100 and b > 100:
+        return 'WHITE'
+    # if r < 70 and g < 120 and b > 100:
+    #     return 'BLUE'
+    if r < 50 and g > 100 and b < 40:
+        return 'GREEN'
+    if r < 100 and g < 100 and b < 100:
+        return 'BLACK'
+    if r > 120 and g < 60 and b < 60:
+        return 'RED'
+    # if r > 120 and g > 100 and b < 60:
+    #     return 'YELLOW'
     return 'WHITE'
 
 def go(left, right):
@@ -166,15 +188,21 @@ def turn_to_pick_up(turn_right):
         turn(-90)
 
     go(BASE_SPEED,BASE_SPEED)
-    sleep(2)
+    sleep(1)
     # go(0,0)
     #print("starting going to box")
     
 
-def drive_to_source(target_color, lift_direction):
-    lcol, rcol = get_colors()
-    # #print("adjusting before box")
-    set_led_status("working")
+def drive_to_source(lift_direction):
+    # lcol, rcol = get_colors()
+    # #print("adjusting before box")2
+
+    if lift_direction == -1:
+        lift.on_for_degrees(LIFT_UP_SPEED, LIFT_DEGREES * lift_direction)
+        turn(180)
+        right_wheel.on_for_degrees(BASE_SPEED, 100, block=False)
+        left_wheel.on_for_degrees(BASE_SPEED, 100, block=True)
+        return
 
     right_wheel.on_for_degrees(BASE_SPEED, 100, block=False)
     left_wheel.on_for_degrees(BASE_SPEED, 100, block=True)
@@ -229,9 +257,15 @@ special_black = False
 def run_transport_cycle(state):
     """Run a single transport cycle using a state machine."""
     last_state=1
+    prev_states = [None, None, None]
     global special_black
     while True:
         lcol, rcol = get_colors()
+        
+        # if prev_states != [lcol, rcol, state]:
+        #     prev_states = [lcol, rcol, state]
+        #     print(lcol, rcol, state)
+        #     print(color_sensor_l.rgb,color_sensor_r.rgb)
         if touch_sensor.is_pressed:
             stop_all_motors()
             logger.info('Button pressed, stopping')
@@ -242,56 +276,43 @@ def run_transport_cycle(state):
         if 'WHITE' == rcol:
             # !!!! reersed color sensors !!!
             if lcol == 'WHITE':
-                go(BASE_SPEED, BASE_SPEED)
+                go(8, 8)
                 continue
             elif(lcol == 'BLACK'):
-                # right_wheel.on_for_degrees(BASE_SPEED>>1, -25, block=False)
-                # left_wheel.on_for_degrees(BASE_SPEED, 30, block=True)
-                right_wheel.on_for_degrees(BASE_SPEED, -10, block=True)
-                
-
-                last_state = 1
+                right_wheel.on_for_degrees(BASE_SPEED, -13, block=True)
                 continue
         if 'WHITE' == lcol:
-   
             if(rcol == 'BLACK'):
-                # left_wheel.on_for_degrees(BASE_SPEED>>1, -25, block=False)
-                # right_wheel.on_for_degrees(BASE_SPEED, 30, block=True)
-
-                left_wheel.on_for_degrees(BASE_SPEED, -10, block=True)
-                # go(-BASE_SPEED, BASE_SPEED)
+                left_wheel.on_for_degrees(BASE_SPEED, -13, block=True)
                 last_state = -1
                 continue
-        if state == STATE_TO_SOURCE and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
+                
+        elif state == STATE_TO_SOURCE and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
             stop_all_motors()
             turn_to_pick_up(rcol == SOURCE_COLOR)
             state = STATE_PICKING_UP
-            break
+
         elif state == STATE_PICKING_UP and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
             stop_all_motors()
-            drive_to_source(target_color=SOURCE_COLOR, lift_direction=1)
+            drive_to_source(lift_direction=1)
             state = STATE_TO_TARGET
             special_black = time()
-            break
+
         elif state ==  STATE_TO_TARGET and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
             stop_all_motors()
             turn_to_pick_up(rcol == TARGET_COLOR)
             state = STATE_DELIVERING
-            break
+
         elif state ==  STATE_DELIVERING and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
             stop_all_motors()
-            drive_to_source(target_color=TARGET_COLOR, lift_direction=-1)
+            drive_to_source(lift_direction=-1)
             state = STATE_TO_SOURCE
-            break
 
         # both BLACK, turn in previous dirction
-        go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
-        # if special_black:
-        #     if time()-special_black < 15:
-        #         turn(90)
-        #     special_black = False
-        # else:
-        #     go(BASE_SPEED,BASE_SPEED)
+        else:
+            last_state = -1
+            go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
+
     return state
 
 # === MAIN ENTRY POINT ===
