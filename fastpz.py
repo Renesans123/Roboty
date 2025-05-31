@@ -1,34 +1,98 @@
 #!/usr/bin/env python3
 from time import time
 try:
-    from ev3dev2.motor import LargeMotor, OUTPUT_A, OUTPUT_B
+    from ev3dev2.motor import LargeMotor, MediumMotor, OUTPUT_A, OUTPUT_B, OUTPUT_C
     from ev3dev2.sensor import INPUT_1, INPUT_2, INPUT_3
     from ev3dev2.sensor.lego import TouchSensor, ColorSensor
     from ev3dev2.sound import Sound
     from ev3dev2.led import Leds
 except Exception:
-    print("Lib import error")
+    class MockMotor():
+        def __init__(self, *args, **kwargs):
+            pass
+        def on(self, speed, brake=False, block=False):
+            pass
+            #print("[MOTOR] on:")
+
+        def stop(self):
+            pass
+            #print("[MOTOR] stop")
+
+        def on_for_degrees(self, speed, degrees):
+            pass
+            #print("[MOTOR] on_for_degrees:")
+
+    class MockColorSensor():
+        def __init__(self, *args, **kwargs):
+            pass
+        @property
+        def rgb(self):
+            # Simulate RGB values that randomly match BLACK, WHITE, GREEN, etc.
+            return [
+                (30, 30, 30),  # BLACK
+                (120, 120, 120),  # WHITE
+                (40, 110, 30),  # GREEN
+                (130, 50, 50),  # RED
+                (200, 200, 200)  # BRIGHT WHITE
+            ][int(time() * 1000) % 5]
+
+    class MockTouchSensor():
+        checked = 0
+        def __init__(self, *args, **kwargs):
+            pass
+        @property
+        def is_pressed(self):
+            if self.checked  >= 2:
+                return False
+            self.checked += 1
+            return True
+
+    class MockSound():
+        def __init__(self, *args, **kwargs):
+            pass
+        def play_tone(self, freq, duration):
+            pass
+            #print("[SOUND] Playing tone: Hz fors")
+
+    class MockLeds():
+        def __init__(self, *args, **kwargs):
+            pass
+        def set_color(self, side, color):
+            pass
+            #print("[LED] ")
+
+    # Replace hardware classes with mocks
+    TouchSensor = MockTouchSensor
+    ColorSensor = MockColorSensor
+    LargeMotor = MediumMotor = MockMotor
+    Sound = MockSound
+    Leds = MockLeds
+
+    # Constants to avoid hardware errors
+    INPUT_1 = INPUT_2 = INPUT_3 = None
+    OUTPUT_A = OUTPUT_B = OUTPUT_C = None
+
 import logging
 from time import sleep
 
 # === CONFIGURATION ===
 SOURCE_COLOR = 'GREEN'
 TARGET_COLOR = 'RED'
-BASE_SPEED = 12
-# LIFT_UP_SPEED = 10
-# LIFT_DEGREES = 120
+BASE_SPEED = 10
+LIFT_UP_SPEED = 10
+LIFT_DEGREES = 120
 
 
 # === STATE MACHINE DEFINITIONS ===
 
-# STATE_IDLE = 0
-# STATE_TO_SOURCE = 1
-# STATE_PICKING_UP = 2
-# STATE_TO_TARGET = 3
-# STATE_DELIVERING = 4
-# STATE_DELIVERED = 5
+STATE_IDLE = 0
+STATE_TO_SOURCE = 1
+STATE_PICKING_UP = 2
+STATE_TO_TARGET = 3
+STATE_DELIVERING = 4
+STATE_DELIVERED = 5
 
-# # === LOGGING SETUP ===
+# === LOGGING SETUP ===
 LOG_FILE = 'robot.log'
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(message)s')
@@ -39,12 +103,13 @@ logger = logging.getLogger(__name__)
 # === DEVICE INITIALIZATION ===
 def init_devices():
     """Initialize all motors, sensors, sound, and LEDs as global variables."""
-    global touch_sensor, color_sensor_l, color_sensor_r, left_wheel, right_wheel, sound, leds
+    global touch_sensor, color_sensor_l, color_sensor_r, left_wheel, right_wheel, lift, sound, leds
     touch_sensor = TouchSensor(INPUT_1)
     color_sensor_r = ColorSensor(INPUT_2)
     color_sensor_l = ColorSensor(INPUT_3)
     left_wheel = LargeMotor(OUTPUT_A)
     right_wheel = LargeMotor(OUTPUT_B)
+    lift = MediumMotor(OUTPUT_C)
     sound = Sound()
     leds = Leds()
 
@@ -111,6 +176,43 @@ def go(left, right):
     # right_wheel.on_for_degrees(right, 25, block=False, brake=False)
     # left_wheel.on_for_degrees(left, 25, block=False, brake=False)
 
+# === ACTIONS ===
+def turn_to_pick_up(turn_right):
+    """Raise the lift to pick up an object."""
+    set_led_status('pickup')
+    #print("starting pickup")
+
+    if turn_right:
+        turn(90)
+    else:
+        turn(-90)
+
+    go(BASE_SPEED,BASE_SPEED)
+    sleep(1)
+    # go(0,0)
+    #print("starting going to box")
+    
+
+def drive_to_source(lift_direction):
+    # lcol, rcol = get_colors()
+    # #print("adjusting before box")2
+
+    if lift_direction == -1:
+        lift.on_for_degrees(LIFT_UP_SPEED, LIFT_DEGREES * lift_direction)
+        turn(180)
+        right_wheel.on_for_degrees(BASE_SPEED, 100, block=False)
+        left_wheel.on_for_degrees(BASE_SPEED, 100, block=True)
+        return
+
+    right_wheel.on_for_degrees(BASE_SPEED, 100, block=False)
+    left_wheel.on_for_degrees(BASE_SPEED, 100, block=True)
+    #print("picking up box")
+    lift.on_for_degrees(LIFT_UP_SPEED, LIFT_DEGREES * lift_direction)
+    right_wheel.on_for_degrees(BASE_SPEED, -100, block=False)
+    left_wheel.on_for_degrees(BASE_SPEED, -100, block=True)
+    turn(180)
+    # pass
+
 # === MOTOR SAFETY ===
 def stop_all_motors():
     """Stop all drive and lift motors."""
@@ -119,8 +221,8 @@ def stop_all_motors():
     right_wheel.on(0, brake=False, block=False)
     left_wheel.stop()
     right_wheel.stop()
-    # lift.on(0, brake=False, block=False)
-    # lift.stop()
+    lift.on(0, brake=False, block=False)
+    lift.stop()
 
 # === LINE FOLLOWING ===
 def get_colors() -> (str, str):
@@ -150,13 +252,11 @@ def turn(degrees):
     left_wheel.on_for_degrees(BASE_SPEED, -degrees, block=True)
 
 
-BOOST_RATIO = 2
-MAX_SPEED = 20
-
+special_black = False
 # === MAIN TRANSPORT ROUTINE WITH STATE MACHINE ===
 def run_transport_cycle(state):
     """Run a single transport cycle using a state machine."""
-    memory_of_black= [10,10]
+    last_state=1
     prev_states = [None, None, None]
     global special_black
     while True:
@@ -168,44 +268,50 @@ def run_transport_cycle(state):
         #     print(color_sensor_l.rgb,color_sensor_r.rgb)
         if touch_sensor.is_pressed:
             stop_all_motors()
-            # logger.info('Button pressed, stopping')
+            logger.info('Button pressed, stopping')
             sleep(0.5)
             while(not touch_sensor.is_pressed):
                 pass
-            return 0
-        elif 'WHITE' == rcol:
+            return STATE_IDLE
+        if 'WHITE' == rcol:
             # !!!! reersed color sensors !!!
             if lcol == 'WHITE':
-                # go(8, 8)
-                go(BASE_SPEED,BASE_SPEED)
-                # continue
+                go(8, 8)
+                continue
             elif(lcol == 'BLACK'):
-                if memory_of_black[1] < 5:
-                    right_wheel.on_for_degrees(BASE_SPEED, 20, block=False)
-                    left_wheel.on_for_degrees(BASE_SPEED, 20, block=True)
-                else:
-                    right_wheel.on_for_degrees(BASE_SPEED, -23, block=True)
-                # continue
-                memory_of_black[0] = 0
-        elif 'WHITE' == lcol:
+                right_wheel.on_for_degrees(BASE_SPEED, -13, block=True)
+                continue
+        if 'WHITE' == lcol:
             if(rcol == 'BLACK'):
-                if memory_of_black[0] < 5:
-                    right_wheel.on_for_degrees(BASE_SPEED, 20, block=False)
-                    left_wheel.on_for_degrees(BASE_SPEED, 20, block=True)
-                else:
-                    left_wheel.on_for_degrees(BASE_SPEED, -23, block=True)
-                    memory_of_black[1] = 0
-                # last_state = -1
-                # continue
+                left_wheel.on_for_degrees(BASE_SPEED, -13, block=True)
+                last_state = -1
+                continue
+                
+        elif state == STATE_TO_SOURCE and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
+            stop_all_motors()
+            turn_to_pick_up(rcol == SOURCE_COLOR)
+            state = STATE_PICKING_UP
+
+        elif state == STATE_PICKING_UP and (lcol == SOURCE_COLOR or rcol == SOURCE_COLOR):
+            stop_all_motors()
+            drive_to_source(lift_direction=1)
+            state = STATE_TO_TARGET
+            special_black = time()
+
+        elif state ==  STATE_TO_TARGET and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
+            stop_all_motors()
+            turn_to_pick_up(rcol == TARGET_COLOR)
+            state = STATE_DELIVERING
+
+        elif state ==  STATE_DELIVERING and lcol == TARGET_COLOR or rcol == TARGET_COLOR:
+            stop_all_motors()
+            drive_to_source(lift_direction=-1)
+            state = STATE_TO_SOURCE
+
+        # both BLACK, turn in previous dirction
         else:
-            # last_state = -1
-            right_wheel.on_for_degrees(BASE_SPEED, 20, block=False)
-            left_wheel.on_for_degrees(BASE_SPEED, 20, block=True)
-            # go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
-            # go(BASE_SPEED,BASE_SPEED)
-            memory_of_black = [10,10]
-        memory_of_black[0] +=1
-        memory_of_black[1] +=1
+            last_state = -1
+            go(BASE_SPEED*last_state,-BASE_SPEED*last_state)
 
     return state
 
@@ -213,13 +319,15 @@ def run_transport_cycle(state):
 def main():
     """Main program loop handling repeated transport cycles and safe shutdown."""
     init_devices()
-    state = 1
+    state = STATE_TO_SOURCE
     try:
 
         while True:
             wait_for_button_press()
-            state = run_transport_cycle(state)
+            while state != STATE_IDLE:
+                state = run_transport_cycle(state)
             # After button stop, go back to IDLE (wait for next press)
+            state = STATE_TO_SOURCE
     except KeyboardInterrupt:
         stop_all_motors()
         #print('KeyboardInterrupt, motors stopped')
